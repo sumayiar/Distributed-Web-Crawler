@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>15 in 2019 | NYC Time Travel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Shrikhand&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-blob blob-one"></div>
+    <div class="bg-blob blob-two"></div>
+    <div class="grain"></div>
+
+    <main class="page">
+      <section class="hero card">
+        <p class="kicker">NYC ARCHIVE PROJECT</p>
+        <h1>AI slop today.<br />An experiment tomorrow.</h1>
+        <p class="lede">
+          This is my time-travel back to being 15 in 2019, in NYC, during peak
+          VSCO girl era: Hydro Flask stickers, scrunchies, “sksksk,” and
+          everything in between.
+        </p>
+        <p>
+          I was 11 in 2016, so I only have chopped-up memories and random photos
+          from that year. But 2019? I’ve got a lot.
+        </p>
+        <p>
+          I’m uploading photos and breaking down what it actually felt like to
+          turn 15 then: the outfits, the internet mood, the city energy, and the
+          cringe that somehow still feels iconic.
+        </p>
+        <a class="cta" href="#uploads">Start the time travel</a>
+      </section>
+
+      <section class="timeline card">
+        <h2>2019 Moodboard Timeline</h2>
+        <div class="timeline-grid">
+          <article>
+            <h3>Morning</h3>
+            <p>Subway rides, oversized hoodies, AirPods in, iced coffee out.</p>
+          </article>
+          <article>
+            <h3>After School</h3>
+            <p>Friend photos on sidewalks and quick edits before sunset.</p>
+          </article>
+          <article>
+            <h3>Night Scroll</h3>
+            <p>TikTok drafts, VSCO filters, and 1am “what was that?” energy.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="uploads" class="uploads card">
+        <h2>Drop Your 2019 Pics</h2>
+        <p class="section-copy">
+          Upload photos and attach a feeling to each one. The site will preview
+          them instantly.
+        </p>
+        <label class="upload-control" for="photo-input">
+          <span>Choose photos</span>
+          <input id="photo-input" type="file" accept="image/*" multiple />
+        </label>
+        <div id="gallery" class="gallery" aria-live="polite"></div>
+      </section>
+
+      <section id="memory-feed" class="vertical-feed card">
+        <h2>2019 Memory Scroll</h2>
+        <p class="section-copy">
+          Swipe vertically like TikTok to replay each memory with your own text.
+        </p>
+        <div id="vertical-scroll" class="vertical-scroll" aria-live="polite"></div>
+      </section>
+
+      <section class="analysis card">
+        <h2>What 15 in 2019 Felt Like</h2>
+        <div class="analysis-grid">
+          <article>
+            <h3>Outfits</h3>
+            <p>
+              Comfort-first but camera-ready: layered neutrals, denim, and
+              whatever felt accidental but intentional.
+            </p>
+          </article>
+          <article>
+            <h3>Internet Mood</h3>
+            <p>
+              Everything was post-worthy and temporary at the same time. It was
+              less polished and more “you had to be there.”
+            </p>
+          </article>
+          <article>
+            <h3>City Energy</h3>
+            <p>
+              NYC made every corner feel cinematic. Even bad photos got main
+              character treatment.
+            </p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
