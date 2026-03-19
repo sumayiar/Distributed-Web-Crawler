@@ -9,6 +9,8 @@ import aiohttp
 from aiohttp import web
 
 from crawler.coordinator import build_app
+from crawler.rag import RagEngine
+from crawler.storage import CrawlStore
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
@@ -134,6 +136,71 @@ class CrawlerIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(stats["done"], 4)
         self.assertEqual(stats["failed"], 0)
         self.assertEqual(stats["pending"], 0)
+
+    async def test_worker_stores_page_text_for_retrieval(self):
+        from crawler.worker import Worker
+
+        root_url = f"http://127.0.0.1:{self.fixture_port}/"
+        await self.post_json("/seed", {"urls": [root_url]})
+        worker = Worker(
+            coordinator_url=f"http://127.0.0.1:{self.coordinator_port}",
+            worker_id="text-worker",
+            batch_size=1,
+            concurrency=1,
+            max_depth=1,
+            request_timeout=5,
+            allowed_domains=[f"127.0.0.1:{self.fixture_port}"],
+        )
+
+        async with aiohttp.ClientSession() as session:
+            leased = await worker.lease_tasks(session)
+            self.assertEqual(len(leased), 1)
+            await worker.process_task(leased[0], session)
+
+        store = CrawlStore(self.db_path)
+        pages = store.top_pages(limit=1)
+        self.assertIn("Home", pages[0]["body_text"])
+
+    async def test_rag_engine_returns_relevant_context_and_answer(self):
+        store = CrawlStore(self.db_path)
+        store.seed([f"http://127.0.0.1:{self.fixture_port}/"], depth=0)
+        store.complete(
+            worker_id="seed-worker",
+            url=f"http://127.0.0.1:{self.fixture_port}/guide",
+            depth=0,
+            status_code=200,
+            content_type="text/html",
+            html_bytes=180,
+            title="Guide",
+            body_text=(
+                "Python retrieval augmented generation uses document chunks. "
+                "Chunking improves recall. Grounded answers cite retrieved context."
+            ),
+            discovered_urls=[],
+            max_depth=3,
+        )
+        store.complete(
+            worker_id="seed-worker",
+            url=f"http://127.0.0.1:{self.fixture_port}/map",
+            depth=0,
+            status_code=200,
+            content_type="text/html",
+            html_bytes=90,
+            title="Map",
+            body_text="Cartography and terrain rendering are unrelated topics.",
+            discovered_urls=[],
+            max_depth=3,
+        )
+
+        engine = RagEngine(store)
+        results = engine.search("How does chunking help retrieval?")
+        self.assertTrue(results)
+        self.assertEqual(results[0]["title"], "Guide")
+        self.assertIn("Chunking improves recall", results[0]["text"])
+
+        answer = engine.answer("Why does chunking help retrieval?")
+        self.assertIn("Chunking improves recall", answer["answer"])
+        self.assertEqual(answer["results"][0]["title"], "Guide")
 
 
 async def asyncio_sleep():

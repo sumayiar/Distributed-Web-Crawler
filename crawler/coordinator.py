@@ -1,12 +1,14 @@
 import argparse
 from aiohttp import web
 
+from crawler.rag import RagEngine
 from crawler.storage import CrawlStore
 
 
 class Coordinator:
     def __init__(self, store: CrawlStore, lease_seconds: int, max_depth: int):
         self.store = store
+        self.rag = RagEngine(store)
         self.lease_seconds = lease_seconds
         self.max_depth = max_depth
 
@@ -38,6 +40,7 @@ class Coordinator:
             content_type=payload.get("content_type") or "",
             html_bytes=int(payload.get("html_bytes") or 0),
             title=payload.get("title") or "",
+            body_text=payload.get("body_text") or "",
             discovered_urls=payload.get("discovered_urls") or [],
             max_depth=self.max_depth,
         )
@@ -59,6 +62,21 @@ class Coordinator:
         limit = int(request.query.get("limit", "20"))
         return web.json_response({"pages": self.store.top_pages(limit=limit)})
 
+    async def handle_search(self, request: web.Request):
+        query = request.query.get("q", "").strip()
+        if not query:
+            return web.json_response({"error": "q is required"}, status=400)
+        limit = int(request.query.get("limit", "5"))
+        return web.json_response({"query": query, "results": self.rag.search(query, limit)})
+
+    async def handle_answer(self, request: web.Request):
+        payload = await request.json()
+        query = (payload.get("query") or "").strip()
+        if not query:
+            return web.json_response({"error": "query is required"}, status=400)
+        limit = int(payload.get("limit", 5))
+        return web.json_response(self.rag.answer(query, limit))
+
 
 def build_app(db_path: str, lease_seconds: int, max_depth: int):
     store = CrawlStore(db_path)
@@ -72,6 +90,8 @@ def build_app(db_path: str, lease_seconds: int, max_depth: int):
             web.post("/fail", coordinator.handle_fail),
             web.get("/stats", coordinator.handle_stats),
             web.get("/pages", coordinator.handle_pages),
+            web.get("/search", coordinator.handle_search),
+            web.post("/answer", coordinator.handle_answer),
         ]
     )
     return app

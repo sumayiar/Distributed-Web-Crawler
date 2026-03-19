@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 
-from crawler.html import extract_links
+from crawler.html import extract_links, extract_text
 
 
 def extract_title(html: str):
@@ -86,6 +86,7 @@ class Worker:
                     "content_type": content_type,
                     "html_bytes": len(body.encode("utf-8")),
                     "title": title,
+                    "body_text": extract_text(body) if "text/html" in content_type else "",
                     "discovered_urls": links,
                 }
 

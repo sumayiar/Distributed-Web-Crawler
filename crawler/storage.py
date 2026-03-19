@@ -1,6 +1,7 @@
 import sqlite3
 import threading
 import time
+from math import log
 from typing import Dict, Iterable, List
 from urllib.parse import urlparse
 
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS pages (
     content_type TEXT,
     fetched_at REAL NOT NULL,
     title TEXT,
+    body_text TEXT NOT NULL DEFAULT '',
     html_bytes INTEGER NOT NULL,
     out_links INTEGER NOT NULL
 );
@@ -56,6 +58,14 @@ class CrawlStore:
     def _initialize(self):
         with self._connect() as connection:
             connection.executescript(SCHEMA)
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(pages)").fetchall()
+            }
+            if "body_text" not in columns:
+                connection.execute(
+                    "ALTER TABLE pages ADD COLUMN body_text TEXT NOT NULL DEFAULT ''"
+                )
 
     def seed(self, urls: Iterable[str], depth: int = 0):
         now = time.time()
@@ -119,6 +129,7 @@ class CrawlStore:
         content_type: str,
         html_bytes: int,
         title: str,
+        body_text: str,
         discovered_urls: Iterable[str],
         max_depth: int,
     ):
@@ -142,10 +153,19 @@ class CrawlStore:
             connection.execute(
                 """
                 INSERT OR REPLACE INTO pages
-                (url, status_code, content_type, fetched_at, title, html_bytes, out_links)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (url, status_code, content_type, fetched_at, title, body_text, html_bytes, out_links)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (url, status_code, content_type, now, title, html_bytes, len(normalized)),
+                (
+                    url,
+                    status_code,
+                    content_type,
+                    now,
+                    title,
+                    body_text,
+                    html_bytes,
+                    len(normalized),
+                ),
             )
             if normalized:
                 connection.executemany(
@@ -212,7 +232,7 @@ class CrawlStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT url, status_code, title, html_bytes, out_links, fetched_at
+                SELECT url, status_code, title, body_text, html_bytes, out_links, fetched_at
                 FROM pages
                 ORDER BY fetched_at DESC
                 LIMIT ?
@@ -220,3 +240,103 @@ class CrawlStore:
                 (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def iter_page_documents(self):
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT url, title, body_text
+                FROM pages
+                WHERE COALESCE(body_text, '') != ''
+                ORDER BY fetched_at DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def search_documents(self, query: str, limit: int = 5, chunk_size: int = 600):
+        terms = _tokenize(query)
+        if not terms:
+            return []
+
+        documents = self.iter_page_documents()
+        chunks = []
+        doc_freq = {}
+        for doc in documents:
+            for index, chunk in enumerate(_chunk_text(doc["body_text"], chunk_size)):
+                tokens = set(_tokenize(chunk))
+                if not tokens:
+                    continue
+                chunk_record = {
+                    "url": doc["url"],
+                    "title": doc["title"] or doc["url"],
+                    "chunk_id": index,
+                    "text": chunk,
+                    "tokens": tokens,
+                }
+                chunks.append(chunk_record)
+                for token in tokens:
+                    doc_freq[token] = doc_freq.get(token, 0) + 1
+
+        if not chunks:
+            return []
+
+        total_chunks = len(chunks)
+        scored = []
+        query_terms = set(terms)
+        for chunk in chunks:
+            overlap = chunk["tokens"] & query_terms
+            if not overlap:
+                continue
+            score = 0.0
+            for token in overlap:
+                score += log((1 + total_chunks) / (1 + doc_freq[token])) + 1.0
+            score += len(overlap) / max(len(query_terms), 1)
+            scored.append(
+                {
+                    "url": chunk["url"],
+                    "title": chunk["title"],
+                    "chunk_id": chunk["chunk_id"],
+                    "score": round(score, 4),
+                    "text": chunk["text"],
+                }
+            )
+
+        scored.sort(key=lambda item: (-item["score"], item["url"], item["chunk_id"]))
+        return scored[:limit]
+
+
+def _tokenize(text: str):
+    token = []
+    tokens = []
+    for char in text.lower():
+        if char.isalnum():
+            token.append(char)
+            continue
+        if token:
+            tokens.append("".join(token))
+            token = []
+    if token:
+        tokens.append("".join(token))
+    return tokens
+
+
+def _chunk_text(text: str, chunk_size: int):
+    normalized = " ".join(text.split())
+    if not normalized:
+        return []
+    words = normalized.split(" ")
+    chunks = []
+    current = []
+    current_len = 0
+    for word in words:
+        extra = len(word) + (1 if current else 0)
+        if current and current_len + extra > chunk_size:
+            chunks.append(" ".join(current))
+            current = [word]
+            current_len = len(word)
+            continue
+        current.append(word)
+        current_len += extra
+    if current:
+        chunks.append(" ".join(current))
+    return chunks

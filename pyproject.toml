@@ -10,6 +10,7 @@ dependencies = [
 [project.scripts]
 crawler-coordinator = "crawler.cli:run_coordinator"
 crawler-worker = "crawler.cli:run_worker"
+crawler-rag = "crawler.cli:run_rag_query"
 
 [build-system]
 requires = ["setuptools>=68"]
